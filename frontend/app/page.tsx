@@ -52,7 +52,7 @@ const Timetable = () => {
     setLoading(true);
     const formData = new FormData(e.currentTarget);
     try {
-      const res = await fetch('https://lock-in-backend.onrender.com/generate-timetable', {
+      const res = await fetch('https://lock-in-chief.onrender.com', {
         method: 'POST',
         body: formData,
       });
@@ -109,7 +109,7 @@ const Exams = () => {
     e.preventDefault();
     setLoading(true);
     const formData = new FormData(e.currentTarget);
-    const res = await fetch('https://lock-in-backend.onrender.com/generate-exams', { method: 'POST', body: formData });
+    const res = await fetch('https://lock-in-chief.onrender.com', { method: 'POST', body: formData });
     setData(await res.json());
     setLoading(false);
   };
@@ -160,7 +160,7 @@ const Strategy = () => {
     e.preventDefault();
     setLoading(true);
     const formData = new FormData(e.currentTarget);
-    const res = await fetch('https://lock-in-backend.onrender.com/generate-strategy', { method: 'POST', body: formData });
+    const res = await fetch('https://lock-in-chief.onrender.com', { method: 'POST', body: formData });
     setData(await res.json());
     setLoading(false);
   };
@@ -222,7 +222,7 @@ const Chat = () => {
     for (let i = 0; i < e.target.files.length; i++) {
       formData.append('files', e.target.files[i]);
     }
-    const res = await fetch('https://lock-in-backend.onrender.com/generate-timetable', { method: 'POST', body: formData });
+    const res = await fetch('https://lock-in-chief.onrender.com', { method: 'POST', body: formData });
     const json = await res.json();
     setContext(json.raw_text);
     setMessages([{ role: "system", content: "Documents loaded. Ask me anything!" }]);
@@ -236,7 +236,7 @@ const Chat = () => {
     setInput("");
     
     try {
-      const res = await fetch('https://lock-in-backend.onrender.com/chat', {
+      const res = await fetch('https://lock-in-chief.onrender.com', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: input, context: context })

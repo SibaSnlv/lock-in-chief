@@ -20,6 +20,10 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 app = FastAPI()
 
+@app.get("/")
+def home():
+    return {"status": "alive", "message": "Lock-In Chief Backend is Running!"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
