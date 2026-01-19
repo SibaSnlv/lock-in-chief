@@ -3,12 +3,9 @@
 import React, { useState } from 'react';
 import { Calendar, BookOpen, MessageSquare, GraduationCap, Upload, Loader2, Home, ArrowRight } from 'lucide-react';
 
-// --- COMPONENTS ---
-
-// 1. HOME LANDING PAGE
 const Landing = ({ setView }: { setView: (view: string) => void }) => (
   <div className="p-8 max-w-4xl mx-auto">
-    <h1 className="text-4xl font-extrabold mb-6 text-blue-700">Lock In Chief 🔒</h1>
+    <h1 className="text-4xl font-extrabold mb-6 text-blue-700">Lock In Chief</h1>
     <p className="text-xl text-gray-900 mb-8 font-medium">Your Academic Operating System. Select a tool to begin.</p>
     
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -35,13 +32,12 @@ const Landing = ({ setView }: { setView: (view: string) => void }) => (
       <button onClick={() => setView('chat')} className="p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transition border-l-4 border-green-600 text-left">
         <MessageSquare className="w-8 h-8 text-green-600 mb-4" />
         <h2 className="text-2xl font-bold text-gray-900">Syllabus Chat</h2>
-        <p className="text-gray-800 mt-2 font-medium">Chat with your documents NotebookLM style.</p>
+        <p className="text-gray-800 mt-2 font-medium">Chat with your study documents.</p>
       </button>
     </div>
   </div>
 );
 
-// 2. TIMETABLE TAB (UPDATED: GRID VIEW)
 const Timetable = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
@@ -64,12 +60,11 @@ const Timetable = () => {
     setLoading(false);
   };
 
-  // Helper to find class for a specific day/time slot
   const getClassForSlot = (day: string, hour: string) => {
     if (!data) return null;
     return data.data.timetable.find((t: any) => 
       t.day.toLowerCase() === day.toLowerCase() && 
-      t.time.startsWith(hour) // Simple match: if class starts at "10:00", it goes in "10" slot
+      t.time.startsWith(hour)
     );
   };
 
@@ -95,7 +90,6 @@ const Timetable = () => {
       ) : (
         <div className="space-y-4">
           
-          {/* --- NEW GRID TIMETABLE START --- */}
           <div className="overflow-x-auto bg-white rounded-lg shadow-md border border-gray-200">
             <table className="w-full min-w-[800px] border-collapse">
               <thead>
@@ -109,12 +103,10 @@ const Timetable = () => {
               <tbody>
                 {times.map(time => (
                   <tr key={time}>
-                    {/* Time Column */}
                     <td className="p-2 border border-gray-300 bg-gray-100 text-center font-bold text-gray-700 text-sm">
                       {time}:00
                     </td>
                     
-                    {/* Days Columns */}
                     {days.map(day => {
                       const cls = getClassForSlot(day, time);
                       return (
@@ -137,7 +129,6 @@ const Timetable = () => {
               </tbody>
             </table>
           </div>
-          {/* --- NEW GRID TIMETABLE END --- */}
 
           <div className="flex gap-4 mt-6">
             <a href={`data:application/pdf;base64,${data.pdf}`} download="timetable.pdf" className="inline-block bg-gray-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-black">Download PDF</a>
@@ -149,7 +140,6 @@ const Timetable = () => {
   );
 };
 
-// 3. EXAMS TAB (UNCHANGED)
 const Exams = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -204,7 +194,6 @@ const Exams = () => {
   );
 };
 
-// 4. STRATEGY TAB (UNCHANGED)
 const Strategy = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -266,7 +255,6 @@ const Strategy = () => {
   );
 };
 
-// 5. CHAT TAB (UNCHANGED)
 const Chat = () => {
   const [context, setContext] = useState("");
   const [messages, setMessages] = useState<{role: string, content: string}[]>([]);
@@ -345,16 +333,14 @@ const Chat = () => {
   );
 };
 
-// --- MAIN LAYOUT (UNCHANGED) ---
 export default function Page() {
   const [view, setView] = useState('home');
 
   return (
     <div className="flex bg-gray-100 min-h-screen">
-      {/* Sidebar */}
       <div className="w-64 bg-gray-900 text-white h-screen fixed left-0 top-0 p-4 flex flex-col z-10 shadow-2xl">
         <div className="mb-10 p-2 border-b border-gray-800 pb-6">
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Lock In Chief 🔒</h1>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">Lock In Chief</h1>
         </div>
         <nav className="space-y-3">
           <button onClick={() => setView('home')} className={`w-full flex items-center gap-3 p-3 rounded-lg transition font-bold ${view === 'home' ? "bg-blue-600 text-white shadow-lg" : "text-gray-400 hover:text-white hover:bg-gray-800"}`}>
@@ -378,7 +364,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* Main Content Area */}
       <div className="ml-64 flex-1">
         {view === 'home' && <Landing setView={setView} />}
         {view === 'timetable' && <Timetable />}
