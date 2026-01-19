@@ -24,29 +24,34 @@ app.add_middleware(
 )
 
 
-# --- 1. SETUP GOOGLE GEMINI ---
-def get_valid_api_url():
-    api_key = os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        print("❌ ERROR: Missing GOOGLE_API_KEY")
+# --- 1. ROBUST GOOGLE SETUP ---
+def get_api_url():
+    key = os.getenv("GOOGLE_API_KEY")
+    if not key:
+        print("🚨 CRITICAL ERROR: GOOGLE_API_KEY is missing in Environment Variables!")
         return None
-    # Default to Gemini 1.5 Flash
-    return f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-
-
-ACTIVE_API_URL = get_valid_api_url()
+    return f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
 
 
 def call_google_api(prompt_text):
-    if not ACTIVE_API_URL: return None
+    url = get_api_url()
+    if not url: return None  # Fails safely if key is missing
+
     headers = {"Content-Type": "application/json"}
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
+
     try:
-        response = requests.post(ACTIVE_API_URL, headers=headers, json=payload)
+        response = requests.post(url, headers=headers, json=payload)
+
+        # DEBUGGING: Print exact error if Google fails
         if response.status_code != 200:
+            print(f"❌ GOOGLE API ERROR: {response.status_code}")
+            print(f"❌ MESSAGE: {response.text}")
             return None
+
         return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-    except:
+    except Exception as e:
+        print(f"❌ CONNECTION ERROR: {str(e)}")
         return None
 
 
@@ -57,15 +62,16 @@ class ChatRequest(BaseModel):
 
 
 # --- 3. ENDPOINTS ---
-
 @app.get("/")
 def home():
-    return {"status": "alive", "message": "Lock-In Chief Backend is Running"}
+    return {"status": "alive", "message": "Backend is running"}
 
 
 @app.post("/chat")
 async def chat_with_syllabus(request: ChatRequest):
-    # Construct the prompt using the syllabus text
+    if not request.context:
+        return {"answer": "I don't have the syllabus context yet. Please generate a schedule first."}
+
     prompt = f"""
     You are a helpful academic assistant. 
     Answer the student's question based ONLY on the syllabus text provided below.
@@ -78,72 +84,80 @@ async def chat_with_syllabus(request: ChatRequest):
     """
 
     answer = call_google_api(prompt)
-    return {"answer": answer if answer else "Sorry, I'm having trouble connecting to the AI right now."}
+    if not answer:
+        return {"answer": "I'm having trouble connecting to the AI. Check the server logs."}
+    return {"answer": answer}
 
 
 @app.post("/process-syllabus")
 async def process_syllabus(files: List[UploadFile] = File(...), user_notes: str = Form(""),
                            preference: str = Form("Any")):
+    # 1. READ FILES
+    combined_text = ""
     try:
-        # Extract Text
-        combined_text = ""
-        for idx, f in enumerate(files):
+        for f in files:
             pdf_bytes = await f.read()
-            try:
-                reader = PdfReader(io.BytesIO(pdf_bytes))
-                for page in reader.pages:
-                    combined_text += page.extract_text() + "\n"
-            except:
-                continue
-
-        # AI Analysis
-        pref_text = ""
-        if preference == "Morning": pref_text = "Prioritize Morning classes (08:00-12:00)."
-        if preference == "Afternoon": pref_text = "Prioritize Afternoon classes (13:00-17:00)."
-
-        prompt = f"""
-        TASK: Create a Weekly Timetable from this syllabus.
-        USER NOTES: {user_notes}
-        PREFERENCE: {pref_text}
-        DATA: {combined_text[:40000]}
-
-        RETURN JSON ONLY: 
-        {{ 
-            "class_timetable": [ {{"subject": "Math", "day": "Monday", "time": "10:00", "venue": "Room 1"}} ], 
-            "exam_calendar": [ {{"title": "Math Exam", "date": "2024-06-01", "time": "09:00"}} ], 
-            "study_plan": {{ "strategy_name": "...", "explanation": "..." }} 
-        }}
-        """
-
-        raw_json = call_google_api(prompt)
-        data = json.loads(raw_json.replace("```json", "").replace("```", "").strip())
-
-        # Generate PDFs (Simplified)
-        def make_pdf(lines):
-            b = io.BytesIO()
-            c = canvas.Canvas(b, pagesize=letter)
-            y = 750
-            for line in lines:
-                c.drawString(40, y, str(line))
-                y -= 20
-            c.save()
-            return base64.b64encode(b.getvalue()).decode()
-
-        timetable_lines = [f"{x['day']} {x['time']}: {x['subject']} ({x['venue']})" for x in
-                           data.get('class_timetable', [])]
-        exam_lines = [f"{x['date']}: {x['title']}" for x in data.get('exam_calendar', [])]
-        strat_lines = [data.get('study_plan', {}).get('explanation', 'No strategy')]
-
-        return {
-            "message": "Success",
-            "raw_text": combined_text,  # <--- CRITICAL FOR CHAT
-            "ai_response": data,
-            "files": {
-                "timetable_pdf": make_pdf(timetable_lines),
-                "exams_pdf": make_pdf(exam_lines),
-                "strategy_pdf": make_pdf(strat_lines)
-            }
-        }
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+            for page in reader.pages:
+                text = page.extract_text()
+                if text: combined_text += text + "\n"
     except Exception as e:
-        print(e)
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"❌ PDF ERROR: {e}")
+        raise HTTPException(status_code=400, detail="Corrupt PDF file")
+
+    if not combined_text:
+        raise HTTPException(status_code=400, detail="Could not read any text from the PDF.")
+
+    # 2. ASK AI
+    prompt = f"""
+    TASK: Create a Weekly Timetable from this syllabus.
+    USER NOTES: {user_notes}
+    PREFERENCE: {preference}
+    DATA: {combined_text[:30000]}
+
+    RETURN JSON ONLY: 
+    {{ 
+        "class_timetable": [ {{"subject": "Math", "day": "Monday", "time": "10:00", "venue": "Room 1"}} ], 
+        "exam_calendar": [ {{"title": "Math Exam", "date": "2024-06-01", "time": "09:00"}} ], 
+        "study_plan": {{ "strategy_name": "...", "explanation": "..." }} 
+    }}
+    """
+
+    raw_json = call_google_api(prompt)
+
+    # 3. SAFETY CHECK (This fixes your crash)
+    if not raw_json:
+        print("❌ AI returned None. Aborting.")
+        raise HTTPException(status_code=500, detail="AI generation failed. Check Render Logs for API Key errors.")
+
+    # 4. PARSE & RETURN
+    try:
+        data = json.loads(raw_json.replace("```json", "").replace("```", "").strip())
+    except:
+        # Fallback if AI sends bad JSON
+        data = {"class_timetable": [], "exam_calendar": [], "study_plan": {"explanation": "AI Error"}}
+
+    # Helper for PDFs
+    def make_pdf(lines):
+        b = io.BytesIO()
+        c = canvas.Canvas(b, pagesize=letter)
+        y = 750
+        for line in lines:
+            c.drawString(40, y, str(line))
+            y -= 20
+        c.save()
+        return base64.b64encode(b.getvalue()).decode()
+
+    timetable_lines = [f"{x['day']} {x['time']}: {x['subject']}" for x in data.get('class_timetable', [])]
+    exam_lines = [f"{x['date']}: {x['title']}" for x in data.get('exam_calendar', [])]
+
+    return {
+        "message": "Success",
+        "raw_text": combined_text,
+        "ai_response": data,
+        "files": {
+            "timetable_pdf": make_pdf(timetable_lines),
+            "exams_pdf": make_pdf(exam_lines),
+            "strategy_pdf": make_pdf([data.get('study_plan', {}).get('explanation', '')])
+        }
+    }
