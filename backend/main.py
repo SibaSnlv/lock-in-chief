@@ -24,7 +24,13 @@ app.add_middleware(
 )
 
 
-# --- SMART MODEL SELECTOR ---
+# --- 1. DATA MODELS (This was missing!) ---
+class ChatRequest(BaseModel):
+    question: str
+    context: str
+
+
+# --- 2. SMART MODEL SELECTOR ---
 def get_optimal_model():
     """Asks Google what models are available and picks the best one."""
     api_key = os.getenv("GOOGLE_API_KEY")
@@ -68,7 +74,7 @@ def get_optimal_model():
         return genai.GenerativeModel('gemini-1.5-flash')
 
 
-# --- 2. ENDPOINTS ---
+# --- 3. ENDPOINTS ---
 @app.get("/")
 def home():
     return {"status": "alive", "message": "Backend is running"}
