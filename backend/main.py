@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-import google.generativeai as genai  # <--- USING THE OFFICIAL LIBRARY
+import google.generativeai as genai
 
 load_dotenv()
 app = FastAPI()
@@ -24,8 +24,9 @@ app.add_middleware(
 )
 
 
-# --- 1. SETUP GOOGLE AI ---
-def get_ai_response(prompt_text):
+# --- SMART MODEL SELECTOR ---
+def get_optimal_model():
+    """Asks Google what models are available and picks the best one."""
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         print("🚨 CRITICAL: GOOGLE_API_KEY is missing.")
@@ -33,31 +34,44 @@ def get_ai_response(prompt_text):
 
     genai.configure(api_key=api_key)
 
-    # SYSTEM: Try Flash first, fallback to Pro if it fails
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
-        response = model.generate_content(prompt_text)
-        return response.text
+        # List all models available to your API Key
+        print("🔍 Scanning for available Google Models...")
+        available_models = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                available_models.append(m.name)
+
+        print(f"✅ FOUND MODELS: {available_models}")
+
+        # Priority list (Try these in order)
+        priorities = ['models/gemini-1.5-flash', 'models/gemini-1.5-pro', 'models/gemini-1.0-pro', 'models/gemini-pro']
+
+        # 1. Check if any priority model exists in the list
+        for p in priorities:
+            if p in available_models:
+                print(f"👉 Selected Model: {p}")
+                return genai.GenerativeModel(p)
+
+        # 2. Fallback: Just take the first "gemini" model found
+        for m in available_models:
+            if "gemini" in m:
+                print(f"👉 Fallback Selection: {m}")
+                return genai.GenerativeModel(m)
+
+        print("❌ No Gemini models found in the list.")
+        return None
+
     except Exception as e:
-        print(f"⚠️ Flash model unavailable ({e}). Switching to Backup...")
-        try:
-            model = genai.GenerativeModel('gemini-pro')  # <--- THE STABLE BACKUP
-            response = model.generate_content(prompt_text)
-            return response.text
-        except Exception as e2:
-            print(f"❌ GOOGLE AI ERROR: {e2}")
-            return None
-
-# --- 2. DATA MODELS ---
-class ChatRequest(BaseModel):
-    question: str
-    context: str
+        print(f"❌ MODEL SCAN ERROR: {e}")
+        # Last ditch effort: Try the standard name blindly
+        return genai.GenerativeModel('gemini-1.5-flash')
 
 
-# --- 3. ENDPOINTS ---
+# --- 2. ENDPOINTS ---
 @app.get("/")
 def home():
-    return {"status": "alive", "message": "Backend is running with Official Google Client"}
+    return {"status": "alive", "message": "Backend is running"}
 
 
 @app.post("/chat")
@@ -65,21 +79,17 @@ async def chat_with_syllabus(request: ChatRequest):
     if not request.context:
         return {"answer": "I don't have the syllabus context yet."}
 
-    prompt = f"""
-    You are a helpful academic assistant. 
-    Answer the student's question based ONLY on the syllabus text provided below.
+    prompt = f"Context: {request.context[:30000]} \n Question: {request.question}"
 
-    SYLLABUS CONTEXT:
-    {request.context[:30000]} 
+    model = get_optimal_model()
+    if not model:
+        return {"answer": "Error: Could not connect to any Google AI models."}
 
-    STUDENT QUESTION:
-    {request.question}
-    """
-
-    answer = get_ai_response(prompt)
-    if not answer:
-        return {"answer": "I'm having trouble thinking right now. Check server logs."}
-    return {"answer": answer}
+    try:
+        response = model.generate_content(prompt)
+        return {"answer": response.text}
+    except Exception as e:
+        return {"answer": f"AI Error: {str(e)}"}
 
 
 @app.post("/process-syllabus")
@@ -96,40 +106,35 @@ async def process_syllabus(files: List[UploadFile] = File(...), user_notes: str 
                 if text: combined_text += text + "\n"
     except Exception as e:
         print(f"❌ PDF READ ERROR: {e}")
-        raise HTTPException(status_code=400, detail="Corrupt PDF file or missing cryptography library.")
+        raise HTTPException(status_code=400, detail="Corrupt PDF file.")
 
     if not combined_text:
         raise HTTPException(status_code=400, detail="No text found in PDF.")
 
     # 2. ASK AI
     prompt = f"""
-    TASK: Create a Weekly Timetable from this syllabus.
-    USER NOTES: {user_notes}
-    PREFERENCE: {preference}
+    TASK: Create a Weekly Timetable.
     DATA: {combined_text[:30000]}
-
-    RETURN JSON ONLY (No markdown formatting): 
-    {{ 
-        "class_timetable": [ {{"subject": "Math", "day": "Monday", "time": "10:00", "venue": "Room 1"}} ], 
-        "exam_calendar": [ {{"title": "Math Exam", "date": "2024-06-01", "time": "09:00"}} ], 
-        "study_plan": {{ "strategy_name": "...", "explanation": "..." }} 
-    }}
+    RETURN JSON ONLY: 
+    {{ "class_timetable": [], "exam_calendar": [], "study_plan": {{ "explanation": "..." }} }}
     """
 
-    raw_response = get_ai_response(prompt)
+    model = get_optimal_model()
+    if not model:
+        raise HTTPException(status_code=500, detail="No AI models available.")
 
-    # 3. SAFETY CHECK
-    if not raw_response:
-        raise HTTPException(status_code=500, detail="AI Generation failed. See logs.")
-
-    # 4. CLEAN & PARSE
     try:
-        # Remove potential markdown code blocks provided by AI
-        clean_json = raw_response.replace("```json", "").replace("```", "").strip()
+        response = model.generate_content(prompt)
+        raw_text = response.text
+    except Exception as e:
+        print(f"❌ GENERATION ERROR: {e}")
+        raise HTTPException(status_code=500, detail=f"AI Generation Failed: {e}")
+
+    # 3. PARSE
+    try:
+        clean_json = raw_text.replace("```json", "").replace("```", "").strip()
         data = json.loads(clean_json)
     except:
-        print(f"❌ JSON PARSE ERROR. AI SAID: {raw_response}")
-        # Fallback data so app doesn't crash
         data = {"class_timetable": [], "exam_calendar": [], "study_plan": {"explanation": "AI format error"}}
 
     # Helper for PDFs
