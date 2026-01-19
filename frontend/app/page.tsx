@@ -85,7 +85,7 @@ const WeeklyGrid = ({ timetable }: { timetable: any[] }) => {
 
 // --- 2. MAIN APP COMPONENT ---
 export default function Home() {
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
   
   const [files, setFiles] = useState<FileList | null>(null);
   const [userNotes, setUserNotes] = useState("");
