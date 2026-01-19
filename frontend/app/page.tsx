@@ -41,7 +41,7 @@ const Landing = ({ setView }: { setView: (view: string) => void }) => (
   </div>
 );
 
-// 2. TIMETABLE TAB
+// 2. TIMETABLE TAB (UPDATED: GRID VIEW)
 const Timetable = () => {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any>(null);
@@ -64,6 +64,18 @@ const Timetable = () => {
     setLoading(false);
   };
 
+  // Helper to find class for a specific day/time slot
+  const getClassForSlot = (day: string, hour: string) => {
+    if (!data) return null;
+    return data.data.timetable.find((t: any) => 
+      t.day.toLowerCase() === day.toLowerCase() && 
+      t.time.startsWith(hour) // Simple match: if class starts at "10:00", it goes in "10" slot
+    );
+  };
+
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  const times = ['08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18'];
+
   return (
     <div className="p-6 space-y-6">
       <h2 className="text-3xl font-extrabold flex items-center gap-2 text-gray-900"><Calendar className="text-blue-600"/> Timetable Architect</h2>
@@ -71,11 +83,9 @@ const Timetable = () => {
       {!data ? (
         <form onSubmit={handleUpload} className="bg-white p-6 rounded-lg shadow-md space-y-4">
           <label className="block font-bold text-gray-900">1. Upload Syllabus PDFs</label>
-          {/* UPDATED: Darker file text */}
           <input type="file" name="files" multiple className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-100 file:text-blue-800 hover:file:bg-blue-200" />
           
           <label className="block font-bold text-gray-900">2. Preferences</label>
-          {/* UPDATED: Black text when typing */}
           <input type="text" name="preference" placeholder="e.g. I prefer morning classes..." className="w-full p-3 border border-gray-300 rounded-lg text-black placeholder-gray-500 font-medium" />
           
           <button type="submit" disabled={loading} className="bg-blue-600 text-white px-6 py-3 rounded-lg w-full font-bold text-lg hover:bg-blue-700 transition">
@@ -84,20 +94,52 @@ const Timetable = () => {
         </form>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.data.timetable.map((cls: any, i: number) => (
-              <div key={i} className="bg-white p-4 rounded-lg shadow-md border-l-4 border-blue-500">
-                <h3 className="font-bold text-lg text-black">{cls.subject}</h3>
-                <p className="text-sm text-gray-900 font-medium">{cls.type} • {cls.group}</p>
-                <div className="mt-2 flex items-center gap-2 text-sm font-bold text-gray-800 bg-gray-100 p-2 rounded">
-                  <span>{cls.day}</span>
-                  <span>{cls.time}</span>
-                </div>
-                <p className="mt-2 text-sm font-bold text-blue-700 uppercase tracking-wide">📍 {cls.venue}</p>
-              </div>
-            ))}
+          
+          {/* --- NEW GRID TIMETABLE START --- */}
+          <div className="overflow-x-auto bg-white rounded-lg shadow-md border border-gray-200">
+            <table className="w-full min-w-[800px] border-collapse">
+              <thead>
+                <tr>
+                  <th className="p-3 bg-gray-900 text-white border border-gray-700 w-20">Time</th>
+                  {days.map(day => (
+                    <th key={day} className="p-3 bg-gray-900 text-white border border-gray-700 w-1/5">{day}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {times.map(time => (
+                  <tr key={time}>
+                    {/* Time Column */}
+                    <td className="p-2 border border-gray-300 bg-gray-100 text-center font-bold text-gray-700 text-sm">
+                      {time}:00
+                    </td>
+                    
+                    {/* Days Columns */}
+                    {days.map(day => {
+                      const cls = getClassForSlot(day, time);
+                      return (
+                        <td key={`${day}-${time}`} className="border border-gray-300 p-1 h-24 align-top relative">
+                          {cls ? (
+                            <div className="bg-blue-100 border-l-4 border-blue-600 p-2 rounded h-full text-xs hover:bg-blue-200 transition overflow-hidden">
+                              <p className="font-extrabold text-blue-900 text-sm truncate">{cls.subject}</p>
+                              <p className="text-black font-bold mt-1">{cls.type} ({cls.group})</p>
+                              <p className="text-gray-700 font-medium mt-1">📍 {cls.venue}</p>
+                              <p className="absolute bottom-1 right-2 text-[10px] text-gray-500">{cls.time}</p>
+                            </div>
+                          ) : (
+                            <div className="h-full w-full bg-gray-50/30"></div> 
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="flex gap-4">
+          {/* --- NEW GRID TIMETABLE END --- */}
+
+          <div className="flex gap-4 mt-6">
             <a href={`data:application/pdf;base64,${data.pdf}`} download="timetable.pdf" className="inline-block bg-gray-900 text-white px-6 py-2 rounded-lg font-bold hover:bg-black">Download PDF</a>
             <button onClick={() => setData(null)} className="text-gray-700 font-bold underline hover:text-black">Start Over</button>
           </div>
@@ -107,7 +149,7 @@ const Timetable = () => {
   );
 };
 
-// 3. EXAMS TAB
+// 3. EXAMS TAB (UNCHANGED)
 const Exams = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -162,7 +204,7 @@ const Exams = () => {
   );
 };
 
-// 4. STRATEGY TAB
+// 4. STRATEGY TAB (UNCHANGED)
 const Strategy = () => {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -224,7 +266,7 @@ const Strategy = () => {
   );
 };
 
-// 5. CHAT TAB
+// 5. CHAT TAB (UNCHANGED)
 const Chat = () => {
   const [context, setContext] = useState("");
   const [messages, setMessages] = useState<{role: string, content: string}[]>([]);
@@ -303,7 +345,7 @@ const Chat = () => {
   );
 };
 
-// --- MAIN LAYOUT ---
+// --- MAIN LAYOUT (UNCHANGED) ---
 export default function Page() {
   const [view, setView] = useState('home');
 
