@@ -1,4 +1,4 @@
-"use client"; // <--- This is required for Next.js
+"use client";
 
 import React, { useState } from 'react';
 import { Calendar, BookOpen, MessageSquare, GraduationCap, Upload, Loader2, Home, ArrowRight } from 'lucide-react';
@@ -15,7 +15,6 @@ const Landing = ({ setView }: { setView: (view: string) => void }) => (
       <button onClick={() => setView('timetable')} className="p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transition border-l-4 border-blue-500 text-left">
         <Calendar className="w-8 h-8 text-blue-500 mb-4" />
         <h2 className="text-2xl font-bold">Timetable Architect</h2>
-        {/* FIXED: Replaced '->' with ArrowRight icon and '&' with 'and' */}
         <p className="text-gray-500 mt-2 flex items-center gap-1">
           Upload <ArrowRight size={16}/> Schedule with venues and groups.
         </p>
@@ -52,14 +51,16 @@ const Timetable = () => {
     setLoading(true);
     const formData = new FormData(e.currentTarget);
     try {
-      const res = await fetch('https://lock-in-chief.onrender.com', {
+      // FIXED: Full URL with endpoint
+      const res = await fetch('https://lock-in-chief.onrender.com/generate-timetable', {
         method: 'POST',
         body: formData,
       });
+      if (!res.ok) throw new Error("Server Error");
       const result = await res.json();
       setData(result);
     } catch (err) {
-      alert("Error generating timetable");
+      alert("Error generating timetable. Please check your file.");
     }
     setLoading(false);
   };
@@ -109,8 +110,12 @@ const Exams = () => {
     e.preventDefault();
     setLoading(true);
     const formData = new FormData(e.currentTarget);
-    const res = await fetch('https://lock-in-chief.onrender.com', { method: 'POST', body: formData });
-    setData(await res.json());
+    try {
+      // FIXED: Full URL with endpoint
+      const res = await fetch('https://lock-in-chief.onrender.com/generate-exams', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error("Server Error");
+      setData(await res.json());
+    } catch(e) { alert("Error extracting exams."); }
     setLoading(false);
   };
 
@@ -160,8 +165,12 @@ const Strategy = () => {
     e.preventDefault();
     setLoading(true);
     const formData = new FormData(e.currentTarget);
-    const res = await fetch('https://lock-in-chief.onrender.com', { method: 'POST', body: formData });
-    setData(await res.json());
+    try {
+      // FIXED: Full URL with endpoint
+      const res = await fetch('https://lock-in-chief.onrender.com/generate-strategy', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error("Server Error");
+      setData(await res.json());
+    } catch(e) { alert("Error generating strategy."); }
     setLoading(false);
   };
 
@@ -222,10 +231,14 @@ const Chat = () => {
     for (let i = 0; i < e.target.files.length; i++) {
       formData.append('files', e.target.files[i]);
     }
-    const res = await fetch('https://lock-in-chief.onrender.com', { method: 'POST', body: formData });
-    const json = await res.json();
-    setContext(json.raw_text);
-    setMessages([{ role: "system", content: "Documents loaded. Ask me anything!" }]);
+    // Re-use timetable endpoint to extract text
+    try {
+      const res = await fetch('https://lock-in-chief.onrender.com/generate-timetable', { method: 'POST', body: formData });
+      if (!res.ok) throw new Error("Server Error");
+      const json = await res.json();
+      setContext(json.raw_text);
+      setMessages([{ role: "system", content: "Documents loaded. Ask me anything!" }]);
+    } catch(e) { alert("Error loading documents."); }
     setLoading(false);
   };
 
@@ -236,7 +249,8 @@ const Chat = () => {
     setInput("");
     
     try {
-      const res = await fetch('https://lock-in-chief.onrender.com', {
+      // FIXED: Full URL with endpoint
+      const res = await fetch('https://lock-in-chief.onrender.com/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: input, context: context })
