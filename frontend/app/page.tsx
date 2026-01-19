@@ -134,23 +134,39 @@ export default function Home() {
     setLoading(false);
   };
 
-  const sendMessage = async () => {
+const sendMessage = async () => {
     if (!input.trim() || !result) return;
     const userMsg = input;
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setInput("");
     setChatLoading(true);
 
+    // --- HARDCODE YOUR URL HERE TO TEST ---
+    // Make sure there is NO slash at the end
+    const DEBUG_URL = "https://lock-in-backend.onrender.com"; 
+    
+    console.log("Sending to:", `${DEBUG_URL}/chat`); // Open F12 Console to see this
+
     try {
-      const res = await fetch(`${API_BASE}/chat`, {
+      const res = await fetch(`${DEBUG_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: userMsg, context: result.raw_text })
+        // We carefully check if context exists
+        body: JSON.stringify({ 
+            question: userMsg, 
+            context: result.raw_text || "No syllabus text found." 
+        })
       });
+
+      if (!res.ok) {
+        throw new Error(`Server Error: ${res.status}`);
+      }
+
       const data = await res.json();
       setMessages(prev => [...prev, { role: 'ai', text: data.answer }]);
-    } catch (e) {
-      setMessages(prev => [...prev, { role: 'ai', text: "Connection error. Try again." }]);
+    } catch (e: any) {
+      alert(`Error: ${e.message}`); // This will tell us EXACTLY what is wrong
+      setMessages(prev => [...prev, { role: 'ai', text: "Connection failed. Check the alert box." }]);
     }
     setChatLoading(false);
   };
