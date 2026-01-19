@@ -2,7 +2,6 @@ import os
 import json
 import base64
 import io
-import requests
 from typing import List
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +10,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+import google.generativeai as genai  # <--- USING THE OFFICIAL LIBRARY
 
 load_dotenv()
 app = FastAPI()
@@ -24,34 +24,21 @@ app.add_middleware(
 )
 
 
-# --- 1. ROBUST GOOGLE SETUP ---
-def get_api_url():
-    key = os.getenv("GOOGLE_API_KEY")
-    if not key:
-        print("🚨 CRITICAL ERROR: GOOGLE_API_KEY is missing in Environment Variables!")
+# --- 1. SETUP GOOGLE AI (THE OFFICIAL WAY) ---
+def get_ai_response(prompt_text):
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        print("🚨 CRITICAL: GOOGLE_API_KEY is missing.")
         return None
-    return f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
-
-
-def call_google_api(prompt_text):
-    url = get_api_url()
-    if not url: return None  # Fails safely if key is missing
-
-    headers = {"Content-Type": "application/json"}
-    payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
 
     try:
-        response = requests.post(url, headers=headers, json=payload)
-
-        # DEBUGGING: Print exact error if Google fails
-        if response.status_code != 200:
-            print(f"❌ GOOGLE API ERROR: {response.status_code}")
-            print(f"❌ MESSAGE: {response.text}")
-            return None
-
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+        genai.configure(api_key=api_key)
+        # We use 'gemini-1.5-flash' - it's fast and free
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        response = model.generate_content(prompt_text)
+        return response.text
     except Exception as e:
-        print(f"❌ CONNECTION ERROR: {str(e)}")
+        print(f"❌ GOOGLE AI ERROR: {e}")
         return None
 
 
@@ -64,13 +51,13 @@ class ChatRequest(BaseModel):
 # --- 3. ENDPOINTS ---
 @app.get("/")
 def home():
-    return {"status": "alive", "message": "Backend is running"}
+    return {"status": "alive", "message": "Backend is running with Official Google Client"}
 
 
 @app.post("/chat")
 async def chat_with_syllabus(request: ChatRequest):
     if not request.context:
-        return {"answer": "I don't have the syllabus context yet. Please generate a schedule first."}
+        return {"answer": "I don't have the syllabus context yet."}
 
     prompt = f"""
     You are a helpful academic assistant. 
@@ -83,9 +70,9 @@ async def chat_with_syllabus(request: ChatRequest):
     {request.question}
     """
 
-    answer = call_google_api(prompt)
+    answer = get_ai_response(prompt)
     if not answer:
-        return {"answer": "I'm having trouble connecting to the AI. Check the server logs."}
+        return {"answer": "I'm having trouble thinking right now. Check server logs."}
     return {"answer": answer}
 
 
@@ -102,11 +89,11 @@ async def process_syllabus(files: List[UploadFile] = File(...), user_notes: str 
                 text = page.extract_text()
                 if text: combined_text += text + "\n"
     except Exception as e:
-        print(f"❌ PDF ERROR: {e}")
-        raise HTTPException(status_code=400, detail="Corrupt PDF file")
+        print(f"❌ PDF READ ERROR: {e}")
+        raise HTTPException(status_code=400, detail="Corrupt PDF file or missing cryptography library.")
 
     if not combined_text:
-        raise HTTPException(status_code=400, detail="Could not read any text from the PDF.")
+        raise HTTPException(status_code=400, detail="No text found in PDF.")
 
     # 2. ASK AI
     prompt = f"""
@@ -115,7 +102,7 @@ async def process_syllabus(files: List[UploadFile] = File(...), user_notes: str 
     PREFERENCE: {preference}
     DATA: {combined_text[:30000]}
 
-    RETURN JSON ONLY: 
+    RETURN JSON ONLY (No markdown formatting): 
     {{ 
         "class_timetable": [ {{"subject": "Math", "day": "Monday", "time": "10:00", "venue": "Room 1"}} ], 
         "exam_calendar": [ {{"title": "Math Exam", "date": "2024-06-01", "time": "09:00"}} ], 
@@ -123,19 +110,21 @@ async def process_syllabus(files: List[UploadFile] = File(...), user_notes: str 
     }}
     """
 
-    raw_json = call_google_api(prompt)
+    raw_response = get_ai_response(prompt)
 
-    # 3. SAFETY CHECK (This fixes your crash)
-    if not raw_json:
-        print("❌ AI returned None. Aborting.")
-        raise HTTPException(status_code=500, detail="AI generation failed. Check Render Logs for API Key errors.")
+    # 3. SAFETY CHECK
+    if not raw_response:
+        raise HTTPException(status_code=500, detail="AI Generation failed. See logs.")
 
-    # 4. PARSE & RETURN
+    # 4. CLEAN & PARSE
     try:
-        data = json.loads(raw_json.replace("```json", "").replace("```", "").strip())
+        # Remove potential markdown code blocks provided by AI
+        clean_json = raw_response.replace("```json", "").replace("```", "").strip()
+        data = json.loads(clean_json)
     except:
-        # Fallback if AI sends bad JSON
-        data = {"class_timetable": [], "exam_calendar": [], "study_plan": {"explanation": "AI Error"}}
+        print(f"❌ JSON PARSE ERROR. AI SAID: {raw_response}")
+        # Fallback data so app doesn't crash
+        data = {"class_timetable": [], "exam_calendar": [], "study_plan": {"explanation": "AI format error"}}
 
     # Helper for PDFs
     def make_pdf(lines):
