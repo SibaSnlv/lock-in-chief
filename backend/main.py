@@ -24,23 +24,29 @@ app.add_middleware(
 )
 
 
-# --- 1. SETUP GOOGLE AI (THE OFFICIAL WAY) ---
+# --- 1. SETUP GOOGLE AI ---
 def get_ai_response(prompt_text):
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         print("🚨 CRITICAL: GOOGLE_API_KEY is missing.")
         return None
 
+    genai.configure(api_key=api_key)
+
+    # SYSTEM: Try Flash first, fallback to Pro if it fails
     try:
-        genai.configure(api_key=api_key)
-        # We use 'gemini-1.5-flash' - it's fast and free
         model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content(prompt_text)
         return response.text
     except Exception as e:
-        print(f"❌ GOOGLE AI ERROR: {e}")
-        return None
-
+        print(f"⚠️ Flash model unavailable ({e}). Switching to Backup...")
+        try:
+            model = genai.GenerativeModel('gemini-pro')  # <--- THE STABLE BACKUP
+            response = model.generate_content(prompt_text)
+            return response.text
+        except Exception as e2:
+            print(f"❌ GOOGLE AI ERROR: {e2}")
+            return None
 
 # --- 2. DATA MODELS ---
 class ChatRequest(BaseModel):
