@@ -1,370 +1,326 @@
-"use client";
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Calendar, BookOpen, MessageSquare, GraduationCap, Upload, Download, Loader2, Home } from 'lucide-react';
+import './App.css';
 
-import { useState, useEffect, useRef } from "react";
-import { 
-  Upload, FileText, Loader2, Calendar as CalIcon, 
-  FileDown, Sparkles, BookOpen, Clock, 
-  ArrowRight, Search, Zap, GraduationCap, Bell, MapPin,
-  MessageSquare, X, Play, Pause, Send, Headphones
-} from "lucide-react";
+// --- COMPONENTS ---
 
-// --- 1. WEEKLY GRID COMPONENT ---
-const WeeklyGrid = ({ timetable }: { timetable: any[] }) => {
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-  
-  // Helper to place blocks on the grid
-  const getPosition = (time: string) => {
-    if (!time) return 0;
-    const [h] = time.split(":").map(Number);
-    return h - 7; // Start grid at 7am
-  };
+// 1. HOME LANDING PAGE
+const Landing = () => (
+  <div className="p-8 max-w-4xl mx-auto">
+    <h1 className="text-4xl font-bold mb-6 text-blue-600">Lock In Chief 🔒</h1>
+    <p className="text-xl text-gray-600 mb-8">Your Academic Operating System. Select a tool to begin.</p>
+    
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <Link to="/timetable" className="p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transition border-l-4 border-blue-500">
+        <Calendar className="w-8 h-8 text-blue-500 mb-4" />
+        <h2 className="text-2xl font-bold">Timetable Architect</h2>
+        <p className="text-gray-500 mt-2">Upload syllabus -> Get a conflict-free schedule with venues & groups.</p>
+      </Link>
+      
+      <Link to="/exams" className="p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transition border-l-4 border-red-500">
+        <GraduationCap className="w-8 h-8 text-red-500 mb-4" />
+        <h2 className="text-2xl font-bold">Exam HQ</h2>
+        <p className="text-gray-500 mt-2">Extract dates & generate a countdown study strategy.</p>
+      </Link>
 
-  const getColor = (subject: string) => {
-    const colors = [
-      "bg-blue-100 border-blue-200 text-blue-700", 
-      "bg-emerald-100 border-emerald-200 text-emerald-700", 
-      "bg-purple-100 border-purple-200 text-purple-700", 
-      "bg-orange-100 border-orange-200 text-orange-700",
-      "bg-rose-100 border-rose-200 text-rose-700"
-    ];
-    let hash = 0;
-    for (let i = 0; i < subject.length; i++) hash = subject.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
+      <Link to="/strategy" className="p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transition border-l-4 border-purple-500">
+        <BookOpen className="w-8 h-8 text-purple-500 mb-4" />
+        <h2 className="text-2xl font-bold">Strategy Guide</h2>
+        <p className="text-gray-500 mt-2">AI analysis of how to ace your specific modules.</p>
+      </Link>
+
+      <Link to="/chat" className="p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transition border-l-4 border-green-500">
+        <MessageSquare className="w-8 h-8 text-green-500 mb-4" />
+        <h2 className="text-2xl font-bold">Syllabus Chat</h2>
+        <p className="text-gray-500 mt-2">Chat with your documents NotebookLM style.</p>
+      </Link>
+    </div>
+  </div>
+);
+
+// 2. TIMETABLE TAB
+const Timetable = () => {
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState(null);
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const formData = new FormData(e.target);
+    try {
+      const res = await fetch('https://lock-in-backend.onrender.com/generate-timetable', {
+        method: 'POST',
+        body: formData,
+      });
+      const result = await res.json();
+      setData(result);
+    } catch (err) {
+      alert("Error generating timetable");
+    }
+    setLoading(false);
   };
 
   return (
-    <div className="overflow-x-auto pb-6">
-      <div className="min-w-[800px] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="grid grid-cols-6 border-b border-gray-100 bg-gray-50">
-          <div className="p-3 text-xs font-semibold text-gray-400 uppercase tracking-wider text-center border-r border-gray-100">Time</div>
-          {days.map(d => (
-            <div key={d} className="p-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center border-r border-gray-100 last:border-0">{d}</div>
-          ))}
+    <div className="p-6 space-y-6">
+      <h2 className="text-3xl font-bold flex items-center gap-2"><Calendar /> Timetable Architect</h2>
+      
+      {!data ? (
+        <form onSubmit={handleUpload} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+          <label className="block font-medium">1. Upload Syllabus PDFs</label>
+          <input type="file" name="files" multiple className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+          <input type="text" name="preference" placeholder="Preferences (e.g. No Friday classes)" className="w-full p-2 border rounded" />
+          <button type="submit" disabled={loading} className="bg-blue-600 text-white px-6 py-2 rounded-lg w-full font-bold">
+            {loading ? <Loader2 className="animate-spin mx-auto"/> : "Generate Schedule"}
+          </button>
+        </form>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {data.data.timetable.map((cls, i) => (
+              <div key={i} className="bg-white p-4 rounded-lg shadow border-l-4 border-blue-400">
+                <h3 className="font-bold text-lg">{cls.subject}</h3>
+                <p className="text-sm text-gray-600">{cls.type} • {cls.group}</p>
+                <div className="mt-2 flex items-center gap-2 text-sm font-mono bg-gray-50 p-2 rounded">
+                  <span>{cls.day}</span>
+                  <span>{cls.time}</span>
+                </div>
+                <p className="mt-2 text-xs font-bold text-blue-600 uppercase tracking-wide">📍 {cls.venue}</p>
+              </div>
+            ))}
+          </div>
+          <a href={`data:application/pdf;base64,${data.pdf}`} download="timetable.pdf" className="inline-block bg-gray-800 text-white px-4 py-2 rounded">Download PDF</a>
+          <button onClick={() => setData(null)} className="ml-4 text-gray-500 underline">Start Over</button>
         </div>
-        <div className="grid grid-cols-6 h-[600px] relative">
-           {/* Time Labels */}
-           <div className="border-r border-gray-100 bg-gray-50/50">
-             {[8,9,10,11,12,13,14,15,16,17].map(h => (
-               <div key={h} className="h-[60px] text-xs text-gray-400 flex items-center justify-center border-b border-gray-50">
-                 {h}:00
-               </div>
-             ))}
-           </div>
-           {/* Days Columns */}
-           {days.map((day, colIndex) => (
-             <div key={day} className="relative border-r border-gray-100 last:border-0 bg-white">
-                {/* Grid Lines */}
-                {[...Array(10)].map((_, i) => (
-                  <div key={i} className="absolute w-full h-[60px] border-b border-gray-50" style={{ top: `${i * 60}px` }} />
-                ))}
-                
-                {/* Class Blocks */}
-                {timetable
-                  .filter(c => c.day === day)
-                  .map((cls, idx) => (
-                    <div 
-                      key={idx}
-                      className={`absolute w-[90%] left-[5%] p-2 rounded-lg text-xs font-medium border shadow-sm ${getColor(cls.subject)}`}
-                      style={{ 
-                        top: `${getPosition(cls.time) * 60}px`,
-                        height: "55px" 
-                      }}
-                    >
-                      <div className="font-bold truncate">{cls.subject}</div>
-                      <div className="opacity-80 truncate">{cls.venue || "Room TBD"}</div>
-                      <div className="absolute top-1 right-1 text-[10px] opacity-60">{cls.time}</div>
-                    </div>
-                ))}
-             </div>
-           ))}
+      )}
+    </div>
+  );
+};
+
+// 3. EXAMS TAB
+const Exams = () => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const formData = new FormData(e.target);
+    const res = await fetch('https://lock-in-backend.onrender.com/generate-exams', { method: 'POST', body: formData });
+    setData(await res.json());
+    setLoading(false);
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <h2 className="text-3xl font-bold flex items-center gap-2"><GraduationCap /> Exam HQ</h2>
+      {!data ? (
+        <form onSubmit={handleUpload} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+          <input type="file" name="files" multiple className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-red-50 file:text-red-700" />
+          <button type="submit" disabled={loading} className="bg-red-600 text-white px-6 py-2 rounded-lg w-full font-bold">
+            {loading ? <Loader2 className="animate-spin mx-auto"/> : "Extract Exams"}
+          </button>
+        </form>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="font-bold text-xl mb-4">Exam Dates</h3>
+            {data.data.exams.map((ex, i) => (
+              <div key={i} className="flex justify-between border-b py-2">
+                <span>{ex.title}</span>
+                <span className="font-mono bg-red-100 text-red-800 px-2 rounded">{ex.date}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-white p-6 rounded-lg shadow">
+            <h3 className="font-bold text-xl mb-4">Study Plan</h3>
+            {data.data.study_schedule.map((s, i) => (
+              <div key={i} className="mb-4">
+                <div className="font-bold text-gray-700">{s.week}</div>
+                <div className="text-sm text-gray-600">{s.focus}</div>
+                <div className="text-xs text-blue-500">{s.method}</div>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+    </div>
+  );
+};
+
+// 4. STRATEGY TAB
+const Strategy = () => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const formData = new FormData(e.target);
+    const res = await fetch('https://lock-in-backend.onrender.com/generate-strategy', { method: 'POST', body: formData });
+    setData(await res.json());
+    setLoading(false);
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <h2 className="text-3xl font-bold flex items-center gap-2"><BookOpen /> Strategy Guide</h2>
+      {!data ? (
+        <form onSubmit={handleUpload} className="bg-white p-6 rounded-lg shadow-md space-y-4">
+          <p className="text-sm text-gray-500">Upload Study Guides or Syllabus for analysis.</p>
+          <input type="file" name="files" multiple className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-purple-50 file:text-purple-700" />
+          <button type="submit" disabled={loading} className="bg-purple-600 text-white px-6 py-2 rounded-lg w-full font-bold">
+            {loading ? <Loader2 className="animate-spin mx-auto"/> : "Analyze Strategy"}
+          </button>
+        </form>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <h3 className="font-bold text-blue-800">General Advice</h3>
+            <p className="text-blue-900">{data.data.general_advice}</p>
+          </div>
+          <div className="grid gap-4">
+            {data.data.modules.map((mod, i) => (
+              <div key={i} className="bg-white p-6 rounded-lg shadow">
+                <div className="flex justify-between items-start">
+                  <h3 className="font-bold text-xl">{mod.name}</h3>
+                  <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded uppercase">{mod.difficulty}</span>
+                </div>
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-bold text-sm text-gray-500">Key Topics</h4>
+                    <ul className="list-disc list-inside text-sm">{mod.key_topics.map(t => <li key={t}>{t}</li>)}</ul>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-sm text-gray-500">Strategy</h4>
+                    <p className="text-sm">{mod.strategy}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 5. CHAT TAB (NotebookLM Style)
+const Chat = () => {
+  const [context, setContext] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleUpload = async (e) => {
+    setLoading(true);
+    const formData = new FormData();
+    for (let i = 0; i < e.target.files.length; i++) {
+      formData.append('files', e.target.files[i]);
+    }
+    // We reuse the timetable endpoint just to extract text quickly, or use a new extract endpoint
+    // For simplicity, let's hit the timetable one and grab raw_text
+    const res = await fetch('https://lock-in-backend.onrender.com/generate-timetable', { method: 'POST', body: formData });
+    const json = await res.json();
+    setContext(json.raw_text); // STORE TEXT IN STATE
+    setMessages([{ role: "system", content: "Documents loaded. Ask me anything!" }]);
+    setLoading(false);
+  };
+
+  const sendMessage = async () => {
+    if (!input) return;
+    const newMsgs = [...messages, { role: "user", content: input }];
+    setMessages(newMsgs);
+    setInput("");
+    
+    try {
+      const res = await fetch('https://lock-in-backend.onrender.com/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: input, context: context })
+      });
+      const data = await res.json();
+      setMessages([...newMsgs, { role: "ai", content: data.answer }]);
+    } catch (err) {
+      setMessages([...newMsgs, { role: "ai", content: "Error connecting to AI." }]);
+    }
+  };
+
+  return (
+    <div className="h-[calc(100vh-2rem)] flex flex-col p-6">
+      <h2 className="text-3xl font-bold flex items-center gap-2 mb-4"><MessageSquare /> Syllabus Chat</h2>
+      
+      {!context ? (
+        <div className="flex-1 flex flex-col justify-center items-center bg-white rounded-lg border-2 border-dashed border-gray-300 p-12">
+          <Upload className="w-12 h-12 text-gray-400 mb-4" />
+          <p className="text-xl text-gray-600 mb-4">Upload documents to start chatting</p>
+          <input type="file" multiple onChange={handleUpload} className="block w-64 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-green-50 file:text-green-700" />
+          {loading && <p className="mt-4 text-green-600 font-bold">Reading documents...</p>}
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col bg-white rounded-lg shadow overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((m, i) => (
+              <div key={i} className={`p-3 rounded-lg max-w-[80%] ${m.role === 'user' ? 'bg-blue-600 text-white ml-auto' : 'bg-gray-100 text-gray-800'}`}>
+                {m.content}
+              </div>
+            ))}
+          </div>
+          <div className="p-4 border-t flex gap-2">
+            <input 
+              value={input} 
+              onChange={(e) => setInput(e.target.value)} 
+              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+              placeholder="Ask about your syllabus..." 
+              className="flex-1 p-2 border rounded" 
+            />
+            <button onClick={sendMessage} className="bg-green-600 text-white px-4 py-2 rounded">Send</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- MAIN LAYOUT & ROUTER ---
+const Sidebar = () => {
+  const location = useLocation();
+  const isActive = (path) => location.pathname === path ? "bg-gray-800 text-white" : "text-gray-400 hover:text-white";
+  
+  return (
+    <div className="w-64 bg-gray-900 text-white h-screen fixed left-0 top-0 p-4 flex flex-col">
+      <div className="mb-8 p-2">
+        <h1 className="text-2xl font-bold text-white">Lock In Chief</h1>
+      </div>
+      <nav className="space-y-2">
+        <Link to="/" className={`flex items-center gap-3 p-3 rounded-lg transition ${isActive('/')}`}><Home size={20}/> Home</Link>
+        <Link to="/timetable" className={`flex items-center gap-3 p-3 rounded-lg transition ${isActive('/timetable')}`}><Calendar size={20}/> Timetable</Link>
+        <Link to="/exams" className={`flex items-center gap-3 p-3 rounded-lg transition ${isActive('/exams')}`}><GraduationCap size={20}/> Exams</Link>
+        <Link to="/strategy" className={`flex items-center gap-3 p-3 rounded-lg transition ${isActive('/strategy')}`}><BookOpen size={20}/> Strategy</Link>
+        <Link to="/chat" className={`flex items-center gap-3 p-3 rounded-lg transition ${isActive('/chat')}`}><MessageSquare size={20}/> Chat</Link>
+      </nav>
+      <div className="mt-auto p-4 bg-gray-800 rounded-lg">
+        <p className="text-xs text-gray-400">Status: <span className="text-green-400">Online</span></p>
       </div>
     </div>
   );
 };
 
-// --- 2. MAIN APP COMPONENT ---
-export default function Home() {
-  const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
-  
-  const [files, setFiles] = useState<FileList | null>(null);
-  const [userNotes, setUserNotes] = useState("");
-  const [preference, setPreference] = useState("Morning");
-  const [loading, setLoading] = useState(false);
-  const [stage, setStage] = useState("idle"); // idle, uploading, processing, done
-  const [result, setResult] = useState<any>(null);
-
-  // Chat
-  const [chatOpen, setChatOpen] = useState(false);
-  const [messages, setMessages] = useState<{role:string, text:string}[]>([
-    { role: 'ai', text: 'Hi! Once you generate your schedule, you can ask me anything about it here.' }
-  ]);
-  const [input, setInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-
-  // Server Wakeup
-  useEffect(() => {
-    fetch(`${API_BASE}/`).catch(() => console.log("Waking up server..."));
-  }, []);
-
-  const handleUpload = async () => {
-    if (!files || files.length === 0) return alert("Please select a PDF first!");
-    setLoading(true);
-    setStage("uploading");
-
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) formData.append("files", files[i]);
-    formData.append("user_notes", userNotes);
-    formData.append("preference", preference);
-
-    try {
-      setStage("processing");
-      // Add a visual delay if it's too fast, or just wait for server
-      const res = await fetch(`${API_BASE}/process-syllabus`, { method: "POST", body: formData });
-      
-      if (!res.ok) throw new Error("Server Error");
-      
-      const data = await res.json();
-      setResult(data);
-      setStage("done");
-    } catch (error) {
-      alert("Server is waking up from sleep. Please try clicking 'Generate' one more time!");
-      setStage("idle");
-    }
-    setLoading(false);
-  };
-
-const sendMessage = async () => {
-    if (!input.trim() || !result) return;
-    const userMsg = input;
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-    setInput("");
-    setChatLoading(true);
-
-    // --- HARDCODE YOUR URL HERE TO TEST ---
-    // Make sure there is NO slash at the end
-    const DEBUG_URL = "https://lock-in-backend.onrender.com"; 
-    
-    console.log("Sending to:", `${DEBUG_URL}/chat`); // Open F12 Console to see this
-
-    try {
-      const res = await fetch(`${DEBUG_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // We carefully check if context exists
-        body: JSON.stringify({ 
-            question: userMsg, 
-            context: result.raw_text || "No syllabus text found." 
-        })
-      });
-
-      if (!res.ok) {
-        throw new Error(`Server Error: ${res.status}`);
-      }
-
-      const data = await res.json();
-      setMessages(prev => [...prev, { role: 'ai', text: data.answer }]);
-    } catch (e: any) {
-      alert(`Error: ${e.message}`); // This will tell us EXACTLY what is wrong
-      setMessages(prev => [...prev, { role: 'ai', text: "Connection failed. Check the alert box." }]);
-    }
-    setChatLoading(false);
-  };
-
-  const downloadFile = (base64: string, name: string) => {
-    const link = document.createElement('a');
-    link.href = `data:application/pdf;base64,${base64}`;
-    link.download = name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
+export default function App() {
   return (
-    <div className="min-h-screen bg-[#F3F4F6] text-slate-800 font-sans selection:bg-blue-100">
-      
-      {/* HEADER */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-blue-600 p-2 rounded-lg"><Sparkles className="w-5 h-5 text-white" /></div>
-            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-blue-500">Lock In Chief</span>
-          </div>
-          <div className="text-sm font-medium text-gray-500">v1.0 Public Beta</div>
+    <Router>
+      <div className="flex bg-gray-50 min-h-screen">
+        <Sidebar />
+        <div className="ml-64 flex-1">
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/timetable" element={<Timetable />} />
+            <Route path="/exams" element={<Exams />} />
+            <Route path="/strategy" element={<Strategy />} />
+            <Route path="/chat" element={<Chat />} />
+          </Routes>
         </div>
       </div>
-
-      <main className="max-w-4xl mx-auto px-6 py-12">
-        
-        {/* HERO */}
-        {!result && (
-          <div className="text-center mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <h1 className="text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">
-              Your Academic <span className="text-blue-600">Autopilot</span>
-            </h1>
-            <p className="text-lg text-slate-500 max-w-xl mx-auto">
-              Upload your messy syllabus PDFs. We'll extract the dates, resolve clashes, and build your perfect strategy.
-            </p>
-          </div>
-        )}
-
-        {/* UPLOAD CARD */}
-        {!result && (
-          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8 hover:shadow-2xl transition-all duration-300">
-            {/* Preference Toggles */}
-            <div className="flex justify-center gap-4 mb-8">
-              {['Morning', 'Afternoon', 'Any'].map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => setPreference(opt)}
-                  className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${
-                    preference === opt 
-                    ? "bg-slate-900 text-white shadow-lg scale-105" 
-                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                  }`}
-                >
-                  {opt} Classes
-                </button>
-              ))}
-            </div>
-
-            {/* File Input */}
-            <div className="border-2 border-dashed border-gray-200 rounded-2xl p-10 text-center hover:border-blue-400 hover:bg-blue-50 transition-colors group cursor-pointer relative">
-              <input 
-                type="file" multiple accept=".pdf"
-                onChange={(e) => setFiles(e.target.files)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Upload className="w-8 h-8" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-slate-700">
-                    {files && files.length > 0 ? `${files.length} files selected` : "Drop syllabus PDFs here"}
-                  </p>
-                  <p className="text-sm text-slate-400 mt-1">or click to browse</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Notes Input */}
-            <div className="mt-6">
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Extra Constraints</label>
-              <textarea 
-                placeholder="e.g. I work on Fridays, No classes before 9am..."
-                className="w-full p-4 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-500 text-slate-700 resize-none h-24"
-                value={userNotes}
-                onChange={(e) => setUserNotes(e.target.value)}
-              />
-            </div>
-
-            {/* Action Button */}
-            <button 
-              onClick={handleUpload}
-              disabled={loading}
-              className={`w-full mt-6 py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all shadow-lg ${
-                loading ? "bg-slate-100 text-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 text-white hover:shadow-blue-200 hover:shadow-xl"
-              }`}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="animate-spin" />
-                  {stage === "uploading" ? "Uploading..." : "Analyzing (Takes ~30s)..."}
-                </>
-              ) : (
-                <>
-                  <Zap className="fill-current" /> Generate My Schedule
-                </>
-              )}
-            </button>
-            <p className="text-center text-xs text-gray-400 mt-4">First run may take 60s while server wakes up.</p>
-          </div>
-        )}
-
-        {/* RESULTS DASHBOARD */}
-        {result && (
-          <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 space-y-8">
-            
-            {/* Quick Actions */}
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-slate-800">Your Optimized Week</h2>
-              <button onClick={() => setResult(null)} className="text-sm font-medium text-gray-500 hover:text-red-500">Reset</button>
-            </div>
-
-            {/* The Grid */}
-            <WeeklyGrid timetable={result.ai_response.class_timetable} />
-
-            {/* Downloads */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button onClick={() => downloadFile(result.files.timetable_pdf, "My_Timetable.pdf")} className="group bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all text-left">
-                <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mb-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                  <CalIcon className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-slate-700">Timetable PDF</h3>
-                <p className="text-xs text-gray-400 mt-1">Printable Version</p>
-              </button>
-
-              <button onClick={() => downloadFile(result.files.exams_pdf, "My_Exams.pdf")} className="group bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all text-left">
-                <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-lg flex items-center justify-center mb-3 group-hover:bg-rose-600 group-hover:text-white transition-colors">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-slate-700">Exam Dates</h3>
-                <p className="text-xs text-gray-400 mt-1">Synced Calendar</p>
-              </button>
-
-              <button onClick={() => downloadFile(result.files.strategy_pdf, "My_Strategy.pdf")} className="group bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all text-left">
-                <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center mb-3 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <h3 className="font-bold text-slate-700">Strategy Guide</h3>
-                <p className="text-xs text-gray-400 mt-1">Study Plan</p>
-              </button>
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* FLOATING CHAT WIDGET */}
-      {result && (
-        <div className={`fixed bottom-6 right-6 w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden transition-all duration-300 z-50 ${chatOpen ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
-          <div className="bg-slate-900 p-4 flex justify-between items-center">
-            <h3 className="text-white font-bold flex items-center gap-2"><MessageSquare className="w-4 h-4" /> Syllabus AI</h3>
-            <button onClick={() => setChatOpen(false)}><X className="text-white/50 hover:text-white w-5 h-5" /></button>
-          </div>
-          <div className="h-80 overflow-y-auto p-4 bg-gray-50 space-y-3">
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white border border-gray-200 text-gray-700 rounded-tl-none shadow-sm'}`}>
-                  {m.text}
-                </div>
-              </div>
-            ))}
-            {chatLoading && <div className="text-xs text-gray-400 ml-2">Thinking...</div>}
-          </div>
-          <div className="p-3 bg-white border-t border-gray-100 flex gap-2">
-            <input 
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-              placeholder="Ask a question..."
-              className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"
-            />
-            <button onClick={sendMessage} className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700"><Send className="w-4 h-4" /></button>
-          </div>
-        </div>
-      )}
-
-      {/* CHAT TOGGLE BUTTON */}
-      {result && !chatOpen && (
-        <button 
-          onClick={() => setChatOpen(true)}
-          className="fixed bottom-6 right-6 bg-slate-900 text-white p-4 rounded-full shadow-lg hover:scale-110 transition-transform z-40"
-        >
-          <MessageSquare className="w-6 h-6" />
-        </button>
-      )}
-
-    </div>
+    </Router>
   );
 }
