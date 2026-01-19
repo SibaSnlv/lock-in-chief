@@ -15,6 +15,7 @@ import google.generativeai as genai
 load_dotenv()
 app = FastAPI()
 
+# INCREASE TIMEOUTS & ALLOW EVERYTHING
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,35 +25,29 @@ app.add_middleware(
 )
 
 
-# --- 1. DATA MODELS ---
 class ChatRequest(BaseModel):
     question: str
     context: str
 
 
-# --- 2. SMART MODEL SELECTOR ---
 def get_optimal_model():
+    """Finds the best available Google Model"""
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key: return None
-
     genai.configure(api_key=api_key)
     try:
-        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        print(f"✅ FOUND MODELS: {available_models}")
+        # Check available models
+        models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
 
-        priorities = ['models/gemini-2.5-flash', 'models/gemini-1.5-flash', 'models/gemini-pro']
-        for p in priorities:
-            if p in available_models:
-                print(f"👉 Selected: {p}")
-                return genai.GenerativeModel(p)
+        # Priority: Fast > Stable > Legacy
+        for m in ['models/gemini-2.5-flash', 'models/gemini-1.5-flash', 'models/gemini-pro']:
+            if m in models: return genai.GenerativeModel(m)
 
-        # Fallback
-        return genai.GenerativeModel(available_models[0]) if available_models else None
+        return genai.GenerativeModel(models[0]) if models else None
     except:
         return genai.GenerativeModel('gemini-1.5-flash')
 
 
-# --- 3. ENDPOINTS ---
 @app.get("/")
 def home():
     return {"status": "alive", "message": "Backend is running"}
@@ -60,22 +55,32 @@ def home():
 
 @app.post("/chat")
 async def chat_with_syllabus(request: ChatRequest):
-    if not request.context: return {"answer": "No context available."}
+    # Truncate context to prevent network timeout on large PDFs
+    safe_context = request.context[:20000]
 
     model = get_optimal_model()
-    if not model: return {"answer": "AI Unavailable."}
+    if not model: return {"answer": "AI is currently sleeping. Try again in 1 minute."}
 
     try:
-        response = model.generate_content(f"Context: {request.context[:30000]} \n Question: {request.question}")
+        # Chat instruction
+        prompt = f"""
+        You are a helpful student assistant. 
+        Answer the question based strictly on the syllabus below.
+        Keep answers short and direct.
+
+        CONTEXT: {safe_context}
+        QUESTION: {request.question}
+        """
+        response = model.generate_content(prompt)
         return {"answer": response.text}
     except Exception as e:
-        return {"answer": f"Error: {str(e)}"}
+        print(f"Chat Error: {e}")
+        return {"answer": "I'm having trouble reading the syllabus right now."}
 
 
 @app.post("/process-syllabus")
 async def process_syllabus(files: List[UploadFile] = File(...), user_notes: str = Form(""),
                            preference: str = Form("Any")):
-    # 1. READ FILES
     combined_text = ""
     try:
         for f in files:
@@ -87,19 +92,31 @@ async def process_syllabus(files: List[UploadFile] = File(...), user_notes: str 
     except:
         raise HTTPException(status_code=400, detail="Invalid PDF")
 
-    if not combined_text:
-        raise HTTPException(status_code=400, detail="Empty PDF")
-
-    # 2. ASK AI
+    # --- THE LOGIC FIX: AGGRESSIVE PROMPT ---
     prompt = f"""
-    TASK: Extract schedule from syllabus.
+    ROLE: You are a University Scheduler.
+    TASK: Create a SINGLE, CONFLICT-FREE weekly timetable for one student.
+
+    CRITICAL RULES:
+    1. The syllabus lists ALL possible groups (Group A, Group B, etc.). DO NOT LIST THEM ALL.
+    2. YOU MUST CHOOSE EXACTLY ONE SLOT per subject.
+    3. If a subject has options (e.g., "Mon 10am OR Tue 2pm"), pick the one that fits best.
+    4. USER PREFERENCE: {preference} (Try to fit this preference).
+    5. USER NOTES: {user_notes}
+
     DATA: {combined_text[:30000]}
 
-    OUTPUT JSON FORMAT ONLY:
+    OUTPUT JSON ONLY (No markdown, no intro):
     {{ 
-        "class_timetable": [ {{"subject": "Math", "day": "Mon", "time": "10:00"}} ], 
-        "exam_calendar": [ {{"title": "Exam 1", "date": "2024-05-20"}} ], 
-        "study_plan": {{ "explanation": "Study hard." }} 
+        "class_timetable": [ 
+            {{"subject": "Math 101", "day": "Monday", "time": "10:00 - 12:00", "venue": "Room 5"}} 
+        ], 
+        "exam_calendar": [ 
+            {{"title": "Math Exam", "date": "2024-06-01"}} 
+        ], 
+        "study_plan": {{ 
+            "explanation": "I selected Group A for Math to leave your Friday free as requested." 
+        }} 
     }}
     """
 
@@ -108,17 +125,13 @@ async def process_syllabus(files: List[UploadFile] = File(...), user_notes: str 
 
     try:
         response = model.generate_content(prompt)
-        raw_text = response.text
-        # Clean Markdown
-        clean_json = raw_text.replace("```json", "").replace("```", "").strip()
+        clean_json = response.text.replace("```json", "").replace("```", "").strip()
         data = json.loads(clean_json)
     except Exception as e:
-        print(f"❌ PARSING ERROR: {e}")
-        # Fallback empty data so we don't crash
-        data = {"class_timetable": [], "exam_calendar": [],
-                "study_plan": {"explanation": "Could not parse AI response."}}
+        print(f"Parsing Error: {e}")
+        data = {"class_timetable": [], "exam_calendar": [], "study_plan": {"explanation": "Could not parse schedule."}}
 
-    # 3. GENERATE PDFS (CRASH-PROOF VERSION)
+    # PDF Generation
     def make_pdf(lines):
         b = io.BytesIO()
         c = canvas.Canvas(b, pagesize=letter)
@@ -129,19 +142,14 @@ async def process_syllabus(files: List[UploadFile] = File(...), user_notes: str 
         c.save()
         return base64.b64encode(b.getvalue()).decode()
 
-    # SAFE PARSING: Use .get() to handle missing keys
+    # Robust Parsing
     timetable_lines = []
-    for item in data.get('class_timetable', []):
-        day = item.get('day', 'Unknown Day')
-        time = item.get('time', 'Unknown Time')
-        subj = item.get('subject', 'Unknown Subject')
-        timetable_lines.append(f"{day} {time}: {subj}")
+    for x in data.get('class_timetable', []):
+        timetable_lines.append(f"{x.get('day', '?')} {x.get('time', '?')}: {x.get('subject', '?')}")
 
     exam_lines = []
-    for item in data.get('exam_calendar', []):
-        date = item.get('date', 'Unknown Date')
-        title = item.get('title', 'Unknown Exam')
-        exam_lines.append(f"{date}: {title}")
+    for x in data.get('exam_calendar', []):
+        exam_lines.append(f"{x.get('date', '?')}: {x.get('title', '?')}")
 
     return {
         "message": "Success",
