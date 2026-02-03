@@ -5,8 +5,6 @@ import { Calendar, BookOpen, MessageSquare, GraduationCap, Upload, Loader2, Home
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 
-// --- CONFIGURATION ---
-// CHANGE THIS: "http://127.0.0.1:5000" for local testing, or "https://lock-in-chief.onrender.com" for live
 const API_URL = "https://lock-in-chief.onrender.com"; 
 
 const stringToGrey = (str: string) => {
@@ -75,8 +73,8 @@ const Landing = ({ setView }: { setView: (view: string) => void }) => {
             LOCK IN <br/> CHIEF.
           </h1>
           <p className="text-xl md:text-2xl text-gray-600 mb-10 max-w-xl leading-relaxed">
-            The minimalist operating system for high-performance students. 
-            Transform chaos into structure with AI.
+            A web-app for university students. 
+            Turning chaos into structure using AI.
           </p>
           <div className="flex flex-wrap gap-4">
             <button onClick={() => setView('timetable')} className="bg-black text-white px-8 py-4 text-lg font-bold hover:bg-gray-800 transition flex items-center gap-2">
@@ -100,7 +98,7 @@ const Landing = ({ setView }: { setView: (view: string) => void }) => {
           <div className="w-12 h-12 bg-black text-white flex items-center justify-center mb-6"><Calendar size={24}/></div>
           <h2 className="text-4xl font-bold mb-6 tracking-tight">Timetable Architect.</h2>
           <p className="text-lg text-gray-600 leading-relaxed mb-8">
-            Stop guessing where you need to be. Upload your messy syllabus PDF, and our AI extracts venue codes, groups, and times to build a conflict-free grid.
+            Stop taking hours sitting down trying to put together a timetable. Upload your syllabus PDF, and our AI extracts venue codes, groups, and times to build a conflict-free schedule.
           </p>
           <button onClick={() => setView('timetable')} className="text-black font-bold border-b-2 border-black pb-1 hover:text-gray-600 hover:border-gray-600 transition">
             Build Schedule →
@@ -113,7 +111,7 @@ const Landing = ({ setView }: { setView: (view: string) => void }) => {
           <div className="w-12 h-12 bg-black text-white flex items-center justify-center mb-6"><BookOpen size={24}/></div>
           <h2 className="text-4xl font-bold mb-6 tracking-tight">Strategy Guide.</h2>
           <p className="text-lg text-gray-600 leading-relaxed mb-8">
-            Hard work isn't enough. You need leverage. We analyze the difficulty of your modules and generate a custom study strategy to maximize your GPA.
+            Work smarter, not harder. AI will analyze the difficulty of your modules and generate a custom study strategy to maximize your effort and performance.
           </p>
           <button onClick={() => setView('strategy')} className="text-black font-bold border-b-2 border-black pb-1 hover:text-gray-600 hover:border-gray-600 transition">
             Analyze Modules →
@@ -125,7 +123,7 @@ const Landing = ({ setView }: { setView: (view: string) => void }) => {
       </section>
 
       <footer className="bg-black text-white py-12 text-center">
-        <p className="text-gray-500 text-sm font-medium">© 2024 LOCK IN CHIEF. DESIGNED FOR ACADEMIC EXCELLENCE.</p>
+        <p className="text-gray-500 text-sm font-medium">© 2024 LOCK IN CHIEF. DESIGNED FOR ACADEMIC VALIDATION.</p>
       </footer>
     </div>
   );
@@ -323,7 +321,6 @@ const Strategy = () => {
     setLoading(true);
     const formData = new FormData(e.currentTarget);
     try {
-      // UPDATED: Using API_URL variable
       const res = await fetch(`${API_URL}/generate-strategy`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error("Server Error");
       setData(await res.json());
@@ -406,7 +403,6 @@ const Chat = () => {
       formData.append('files', e.target.files[i]);
     }
     try {
-      // UPDATED: Using API_URL variable
       const res = await fetch(`${API_URL}/generate-timetable`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error("Server Error");
       const json = await res.json();
@@ -422,7 +418,6 @@ const Chat = () => {
     setMessages(newMsgs);
     setInput("");
     try {
-      // UPDATED: Using API_URL variable
       const res = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
